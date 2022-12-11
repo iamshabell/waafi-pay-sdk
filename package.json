@@ -31,7 +31,7 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "waafi-pay-sdk",
+  "name": "@iamshabell/waafipay-sdk",
   "author": "Mubarak Shabel",
   "repository": {
     "type": "git",
