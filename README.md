@@ -1,103 +1,194 @@
-# TSDX User Guide
+# WaafiPay SDK Guide
 
-Congrats! You just saved yourself hours of work by bootstrapping this project with TSDX. Let’s get you oriented with what’s here and how to use it.
-
-> This TSDX setup is meant for developing libraries (not apps!) that can be published to NPM. If you’re looking to build a Node app, you could use `ts-node-dev`, plain `ts-node`, or simple `tsc`.
+This is a TypeScript version of this previous [waafipay-sdk-node](https://www.npmjs.com/package/waafipay-sdk-node) package.
 
 > If you’re new to TypeScript, checkout [this handy cheatsheet](https://devhints.io/typescript)
 
-## Commands
+## Installing
 
-TSDX scaffolds your new library inside `/src`.
-
-To run TSDX, use:
+To install waafi-pay-sdk, use:
 
 ```bash
-npm start # or yarn start
+npm intall waafi-pay-sdk # or yarn add waafi-pay-sdk
 ```
 
-This builds to `/dist` and runs the project in watch mode so any edits you save inside `src` causes a rebuild to `/dist`.
+There are two methods available in this sdk is _apiPurchase_ and _creditAccount_. In order to use this methods, you need to have api credentials from waafi pay(_API KEY_,_API USER ID_,_MERCHANT KEY_).
 
-To do a one-off build, use `npm run build` or `yarn build`.
+## Api Purchase
 
-To run tests, use `npm test` or `yarn test`.
+This method is for `Getting Money From Customers`. You will need to pass the customer's information, including _phone number_, _amount_, _currency_, _description_.
 
-## Configuration
+#### An example of Api Purchasing with express:
 
-Code quality is set up for you with `prettier`, `husky`, and `lint-staged`. Adjust the respective fields in `package.json` accordingly.
+```typescript
+...
+import { WaafiAPI } from "waafi-pay-sdk";
 
-### Jest
+const app: Express = express();
+const port = 3001;
 
-Jest tests are set up to run with `npm test` or `yarn test`.
+const waafipay = new WaafiAPI(
+  "API_KEY",
+  "API_USER_ID",
+  "MERCHANT_KEY",
+  true, //--> isTestMode -> true is production : false is test
+  );
 
-### Bundle Analysis
 
-[`size-limit`](https://github.com/ai/size-limit) is set up to calculate the real cost of your library with `npm run size` and visualize the bundle with `npm run analyze`.
+app.post("/purchase", async (req: Request, res: Response, next) => {
+  try {
+    const { accountNo, amount, currency, description } = req.body;
 
-#### Setup Files
+    const result = await waafipay.apiPurchase({
+      accountNo: accountNo,
+      amount: amount,
+      currency: currency,
+      description: description,
+    });
 
-This is the folder structure we set up for you:
+    console.log("result: " + JSON.stringify(result));
+    res.status(200).json(JSON.stringify(result));
+  } catch (e) {
+    console.log(e);
 
-```txt
-/src
-  index.tsx       # EDIT THIS
-/test
-  blah.test.tsx   # EDIT THIS
-.gitignore
-package.json
-README.md         # EDIT THIS
-tsconfig.json
+    res.status(400).send(e);
+  }
+});
+
+...
 ```
 
-### Rollup
+And here is an example of the request body:
 
-TSDX uses [Rollup](https://rollupjs.org) as a bundler and generates multiple rollup configs for various module formats and build settings. See [Optimizations](#optimizations) for details.
-
-### TypeScript
-
-`tsconfig.json` is set up to interpret `dom` and `esnext` types, as well as `react` for `jsx`. Adjust according to your needs.
-
-## Continuous Integration
-
-### GitHub Actions
-
-Two actions are added by default:
-
-- `main` which installs deps w/ cache, lints, tests, and builds on all pushes against a Node and OS matrix
-- `size` which comments cost comparison of your library on every pull request using [`size-limit`](https://github.com/ai/size-limit)
-
-## Optimizations
-
-Please see the main `tsdx` [optimizations docs](https://github.com/palmerhq/tsdx#optimizations). In particular, know that you can take advantage of development-only optimizations:
-
-```js
-// ./types/index.d.ts
-declare var __DEV__: boolean;
-
-// inside your code...
-if (__DEV__) {
-  console.log('foo');
+```javascript
+{
+    "accountNo": "2526XXXXXX", //-> customer's phone number
+    "amount": 1,
+    "currency": "USD", //-> optional, default is USD. It also takes (SLSH)
+    "description": "test"
 }
 ```
 
-You can also choose to install and use [invariant](https://github.com/palmerhq/tsdx#invariant) and [warning](https://github.com/palmerhq/tsdx#warning) functions.
+When it is success, it will return this:
 
-## Module Formats
+```javascript
+{
+    "schemaVersion": "1.0",
+    "timestamp": "2022-2-22 22:22:22.22",
+    "requestId": "45231213",
+    "sessionId": null,
+    "responseCode": "2001",
+    "errorCode": "0",
+    "responseMsg": "RCS_SUCCESS",
+    "params": {
+        "issuerApprovalCode": "",
+        "accountNo": "2526*********",
+        "accountType": "MWALLET_ACCOUNT",
+        "accountholder": "",
+        "state": "APPROVED",
+        "merchantCharges": "111",
+        "customerCharges": "0.0",
+        "referenceId": "455656",
+        "transactionId": "465656",
+        "accountExpDate": "",
+        "issuerTransactionId": "23156231",
+        "txAmount": "0"
+    }
+}
+```
 
-CJS, ESModules, and UMD module formats are supported.
+If everything gone through success, _responseCode_ will be `2001`. If there are other problems:
 
-The appropriate paths are configured in `package.json` and `dist/index.js` accordingly. Please report if any issues are found.
+User Aborted(canceled):
 
-## Named Exports
+- _responseCode_: `5206`
+- _responseMsg_: `"RCS_TRAN_FAILED_AT_ISSUER_SYSTEM (STATE: rejected, ERRCODE: 4004 - User Aborted, TransactionId: 465656)"`
 
-Per Palmer Group guidelines, [always use named exports.](https://github.com/palmerhq/typescript#exports) Code split inside your React app instead of your React library.
+User Insufficient:
 
-## Including Styles
+- _responseCode_: `5206`
+- _responseMsg_: `"RCS_TRAN_FAILED_AT_ISSUER_SYSTEM (STATE: declined, ERRCODE: 8001 - Hadhaagaagu kuguma filna. Hadhaagaagu waa {SENDERBALANCE}, TransactionId: 465656)"`
 
-There are many ways to ship styles, including with CSS-in-JS. TSDX has no opinion on this, configure how you like.
+## Credit Account
 
-For vanilla CSS, you can include it at the root directory and add it to the `files` section in your `package.json`, so that it can be imported separately by your users and run through their bundler's loader.
+This method is for when you want to withdraw your money from `Waafi` to your account. Your account is either regular account or merchant account
 
-## Publishing to NPM
+#### An example of Crediting to Account :
 
-We recommend using [np](https://github.com/sindresorhus/np).
+```typescript
+...
+app.post("/credit", async (req: Request, res: Response, next) => {
+  try {
+    const { accountNo, accountName, amount, currency, description, accountType } = req.body;
+
+    const response = await waafipay.creditAccount({
+      accountNo: accountNo,
+      accountHolder: accountName,
+      amount: amount,
+      currency: currency,
+      description: description,
+      accountType: accountType,
+    });
+
+    console.log("response: " + JSON.stringify(response));
+    res.status(200).json(JSON.stringify(response));
+  } catch (e) {
+    console.log(e);
+
+    res.status(400).send(e);
+  }
+});
+...
+```
+
+And here is an example of the body:
+
+```javascript
+{
+    "accountNo": "2526XXXXXX", //-> reciever's phone number
+    "accountName": "GEEDI", // -> reciever's name,
+    "accountType": "CUSTOMER", // -> recievers account type, it als could be (MERCHANT)
+    "amount": 1,
+    "currency": "USD", //-> optional, default is USD. It also takes (SLSH)
+    "description": "test"
+}
+```
+
+When it is success, it will return this:
+
+```javascript
+{
+    "schemaVersion": "1.0",
+    "timestamp": "2022-2-22 22:22:22.22",
+    "requestId": "45231213",
+    "sessionId": null,
+    "responseCode": "2001",
+    "errorCode": "0",
+    "responseMsg": "RCS_SUCCESS",
+    "params": {
+        "issuerApprovalCode": "",
+        "accountNo": "2526*********",
+        "accountType": "MWALLET_ACCOUNT",
+        "accountholder": "GEEDI",
+        "state": "APPROVED",
+        "merchantCharges": "111",
+        "customerCharges": "0.0",
+        "referenceId": "455656",
+        "transactionId": "465656",
+        "accountExpDate": "",
+        "issuerTransactionId": "23156231",
+        "txAmount": "0"
+    }
+}
+```
+
+If everything gone through success, _responseCode_ will be `2001`. If there are other problems:
+
+Your Account(Waafi) has insufficient money:
+
+- _responseCode_: `50333`
+- _responseMsg_: `"RCS_ACC_INSUFFICIENT_BALANCE"`
+
+## Support
+
+This packages will be open source, feel free to contribute.
